@@ -10,11 +10,11 @@ gui.Parent = player:WaitForChild("PlayerGui")
 
 -- Secure API Configuration (TEMPORARY SETUP)
 local SECURE_API = {
-    KEY = "sk-proj-C1dRqkUEsx...CR85ueYhlt69", -- Partially redacted
+    KEY = "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",
     ENDPOINT = "https://api.openai.com/v1/chat/completions",
     HEADERS = {
         ["Content-Type"] = "application/json",
-        ["Authorization"] = "Bearer ".."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"
+        ["Authorization"] = "Bearer ".."sk-proj-C1dRqkUEsx...CR85ueYhlt69"
     }
 }
 
