@@ -1,10 +1,8 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
-local DataStoreService = game:GetService("DataStoreService")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 
 -- HyperGate Configuration
 local HyperGate = {
@@ -13,7 +11,6 @@ local HyperGate = {
         Secondary = Color3.fromRGB(0, 255, 163),
         Accent = Color3.fromRGB(140, 0, 255)
     },
-    DataStore = "HyperGateSettings_"..game.GameId,
     Backgrounds = {
         "rbxassetid://7125432456", -- Nebula
         "rbxassetid://7125432457", -- Circuit
@@ -22,30 +19,8 @@ local HyperGate = {
     }
 }
 
--- Cloud Save System
+-- Client-Side Settings
 local PlayerSettings = {}
-local SettingsStore = DataStoreService:GetDataStore(HyperGate.DataStore)
-
-local function SaveSettings(player)
-    pcall(function()
-        SettingsStore:SetAsync(player.UserId, PlayerSettings[player.UserId])
-    end)
-end
-
-local function LoadSettings(player)
-    local data
-    pcall(function()
-        data = SettingsStore:GetAsync(player.UserId)
-    end)
-    
-    PlayerSettings[player.UserId] = data or {
-        Background = HyperGate.Backgrounds[1],
-        Volume = 1,
-        Animations = true
-    }
-    
-    return PlayerSettings[player.UserId]
-end
 
 -- Draggable GUI System
 local function MakeDraggable(frame)
@@ -86,7 +61,7 @@ end
 local function CreateBackground(parent)
     local background = Instance.new("ImageLabel")
     background.Size = UDim2.new(1, 0, 1, 0)
-    background.Image = PlayerSettings[Players.LocalPlayer.UserId].Background
+    background.Image = PlayerSettings.Background or HyperGate.Backgrounds[1]
     background.ScaleType = Enum.ScaleType.Tile
     background.TileSize = UDim2.new(0, 512, 0, 512)
     background.BackgroundTransparency = 1
@@ -102,8 +77,7 @@ end
 -- Keyless Profile System
 local function CreateProfile()
     local player = Players.LocalPlayer
-    LoadSettings(player)
-    
+
     local avatar = gui.MainFrame.ProfileFrame.Avatar
     avatar.Image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", player.UserId)
     
@@ -112,13 +86,15 @@ local function CreateProfile()
     sessionTime.Text = "Session: 00:00:00"
     sessionTime.TextColor3 = HyperGate.Theme.Secondary
     sessionTime.Parent = avatar
-    
+
+    local startTime = tick()
+
     RunService.Heartbeat:Connect(function()
-        local duration = os.time() - HyperGate.SessionStart
+        local duration = tick() - startTime
         sessionTime.Text = string.format("Session: %02d:%02d:%02d",
-            math.floor(duration/3600),
-            math.floor((duration%3600)/60),
-            math.floor(duration%60)
+            math.floor(duration / 3600),
+            math.floor((duration % 3600) / 60),
+            math.floor(duration % 60)
         )
     end)
 end
@@ -187,72 +163,14 @@ local function CreateAIChat(parent)
     end)
 end
 
--- Cross-Server Teleportation System
-local function CreateTeleportUI(parent)
-    local userIdEntry = Instance.new("TextBox")
-    userIdEntry.PlaceholderText = "Enter Username/ID"
-    userIdEntry.Size = UDim2.new(1, -20, 0, 30)
-    userIdEntry.Position = UDim2.new(0, 10, 0, 10)
-    userIdEntry.BackgroundColor3 = HyperGate.Theme.Primary
-    userIdEntry.TextColor3 = HyperGate.Theme.Secondary
-    userIdEntry.Parent = parent
-
-    local teleportButton = Instance.new("TextButton")
-    teleportButton.Text = "Teleport to Player"
-    teleportButton.Size = UDim2.new(1, -20, 0, 40)
-    teleportButton.Position = UDim2.new(0, 10, 0, 50)
-    teleportButton.BackgroundColor3 = HyperGate.Theme.Accent
-    teleportButton.TextColor3 = Color3.new(1, 1, 1)
-    teleportButton.Parent = parent
-
-    local avatarFrame = Instance.new("ImageLabel")
-    avatarFrame.Size = UDim2.new(0, 80, 0, 80)
-    avatarFrame.Position = UDim2.new(0.5, -40, 0, 100)
-    avatarFrame.BackgroundColor3 = Color3.new(1, 1, 1)
-    avatarFrame.Image = "rbxasset://textures/ui/PlayerAvatar.png"
-    avatarFrame.Parent = parent
-
-    local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(1, 0)
-    UICorner.Parent = avatarFrame
-
-    userIdEntry.FocusLost:Connect(function()
-        local success, result = pcall(function()
-            return Players:GetUserIdFromNameAsync(userIdEntry.Text)
-        end)
-        
-        if success then
-            avatarFrame.Image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", result)
-        else
-            avatarFrame.Image = "rbxasset://textures/ui/PlayerAvatar.png"
-        end
-    end)
-
-    teleportButton.MouseButton1Click:Connect(function()
-        local success, userId = pcall(function()
-            return Players:GetUserIdFromNameAsync(userIdEntry.Text)
-        end)
-        
-        if success then
-            local success, jobId = pcall(function()
-                return HttpService:GetAsync(string.format("https://api.roblox.com/users/%d/onlinestatus/", userId))
-            end)
-            
-            if success and jobId then
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId)
-            else
-                warn("Failed to fetch player's server.")
-            end
-        else
-            warn("Invalid username or ID.")
-        end
-    end)
-end
-
 -- Settings System
 local function CreateSettings()
-    local settings = PlayerSettings[Players.LocalPlayer.UserId]
-    
+    local settingsFrame = Instance.new("Frame")
+    settingsFrame.Size = UDim2.new(0, 300, 0, 200)
+    settingsFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
+    settingsFrame.BackgroundColor3 = HyperGate.Theme.Primary
+    settingsFrame.Parent = gui
+
     -- Background Selector
     local bgSelector = Instance.new("ScrollingFrame")
     bgSelector.Size = UDim2.new(1, 0, 0, 80)
@@ -262,9 +180,8 @@ local function CreateSettings()
         local thumb = Instance.new("ImageButton")
         thumb.Image = bg
         thumb.MouseButton1Click:Connect(function()
-            settings.Background = bg
+            PlayerSettings.Background = bg
             CreateBackground(mainFrame)
-            SaveSettings(Players.LocalPlayer)
         end)
         thumb.Parent = bgSelector
     end
@@ -283,11 +200,22 @@ mainFrame.Parent = gui
 MakeDraggable(mainFrame)
 CreateBackground(mainFrame)
 CreateProfile()
-CreateTeleportUI(mainFrame)
 CreateAIChat(mainFrame)
 CreateSettings()
 
 -- Auto-save on game close
 game:BindToClose(function()
-    SaveSettings(Players.LocalPlayer)
+    -- Save player settings when the game is closed
+    pcall(function()
+        SaveSettings(Players.LocalPlayer)
+    end)
+end)
+
+-- Save the settings when the player leaves
+Players.PlayerRemoving:Connect(function(player)
+    if player == Players.LocalPlayer then
+        pcall(function()
+            SaveSettings(player)
+        end)
+    end
 end)
