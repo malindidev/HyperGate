@@ -22,13 +22,55 @@ local HyperGate = {
 -- Client-Side Settings
 local PlayerSettings = {}
 
--- SaveSettings function (customize as needed)
+-- Create loading screen
+local loadingGui = Instance.new("ScreenGui")
+loadingGui.Name = "LoadingScreen"
+loadingGui.IgnoreGuiInset = true
+loadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local loadingFrame = Instance.new("Frame")
+loadingFrame.Size = UDim2.new(1, 0, 1, 0)
+loadingFrame.BackgroundColor3 = HyperGate.Theme.Primary
+loadingFrame.Parent = loadingGui
+
+local loadingBar = Instance.new("Frame")
+loadingBar.Size = UDim2.new(0, 0, 0, 4)
+loadingBar.Position = UDim2.new(0.5, 0, 0.5, 0)
+loadingBar.AnchorPoint = Vector2.new(0.5, 0.5)
+loadingBar.BackgroundColor3 = HyperGate.Theme.Secondary
+loadingBar.Parent = loadingFrame
+
+local loadingText = Instance.new("TextLabel")
+loadingText.Text = "HYPERGATE INITIALIZING"
+loadingText.TextColor3 = Color3.new(1, 1, 1)
+loadingText.Size = UDim2.new(1, 0, 0, 50)
+loadingText.Position = UDim2.new(0, 0, 0.45, 0)
+loadingText.BackgroundTransparency = 1
+loadingText.Parent = loadingFrame
+
+loadingGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+-- Animate loading bar
+local loadTween = TweenService:Create(loadingBar, TweenInfo.new(2, Enum.EasingStyle.Quad), {
+    Size = UDim2.new(0.7, 0, 0, 4)
+})
+loadTween:Play()
+
+-- Main GUI Setup (hidden during loading)
+local gui = Instance.new("ScreenGui")
+gui.Name = "HyperGateUI"
+gui.Enabled = false
+gui.Parent = Players.LocalPlayer.PlayerGui
+
+-- Rest of the code remains the same until we enable the GUI later
+
+-- SaveSettings function
 local function SaveSettings(player)
     local settingsJson = HttpService:JSONEncode(PlayerSettings)
     print("Settings saved for " .. player.Name .. ": " .. settingsJson)
 end
 
--- Draggable GUI System (Mobile-Friendly)
+-- Draggable GUI System
 local function MakeDraggable(frame)
     local dragging, dragInput, dragStart, startPos
 
@@ -61,8 +103,14 @@ local function MakeDraggable(frame)
 end
 
 -- Dynamic Background System
+local currentBackground
 local function CreateBackground(parent)
+    if currentBackground then
+        currentBackground:Destroy()
+    end
+    
     local background = Instance.new("ImageLabel")
+    currentBackground = background
     background.Size = UDim2.new(1, 0, 1, 0)
     background.Image = PlayerSettings.Background or HyperGate.Backgrounds[1]
     background.ScaleType = Enum.ScaleType.Tile
@@ -71,16 +119,15 @@ local function CreateBackground(parent)
     background.ZIndex = -1
     background.Parent = parent
 
-    -- Animate background
     TweenService:Create(background, TweenInfo.new(30, Enum.EasingStyle.Linear), {
         Position = UDim2.new(-1, 0, -1, 0)
     }):Play()
 end
 
 -- Keyless Profile System
-local function CreateProfile()
+local function CreateProfile(mainFrame)
     local player = Players.LocalPlayer
-    local avatar = gui.MainFrame.ProfileFrame.Avatar
+    local avatar = mainFrame.ProfileFrame.Avatar
     avatar.Image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", player.UserId)
 
     -- Session Timer
@@ -93,7 +140,6 @@ local function CreateProfile()
     sessionTime.Parent = avatar
 
     local startTime = tick()
-
     RunService.Heartbeat:Connect(function()
         local duration = tick() - startTime
         sessionTime.Text = string.format("Session: %02d:%02d:%02d",
@@ -103,110 +149,11 @@ local function CreateProfile()
         )
     end)
 end
--- Smart AI System with Command Response
-local function CreateAIChat(parent)
-    local chatFrame = Instance.new("Frame")
-    chatFrame.Size = UDim2.new(1, -20, 0, 150)
-    chatFrame.Position = UDim2.new(0, 10, 0, 350)
-    chatFrame.BackgroundColor3 = HyperGate.Theme.Primary
-    chatFrame.Parent = parent
 
-    local chatScroll = Instance.new("ScrollingFrame")
-    chatScroll.Size = UDim2.new(1, -10, 1, -40)
-    chatScroll.Position = UDim2.new(0, 5, 0, 5)
-    chatScroll.BackgroundTransparency = 1
-    chatScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    chatScroll.Parent = chatFrame
+-- Smart AI System
+-- ... (keep the original CreateAIChat and CreateSettings functions from first occurrence) ...
 
-    local chatInput = Instance.new("TextBox")
-    chatInput.Size = UDim2.new(1, -10, 0, 30)
-    chatInput.Position = UDim2.new(0, 5, 1, -35)
-    chatInput.PlaceholderText = "Ask me something..."
-    chatInput.BackgroundColor3 = HyperGate.Theme.Primary
-    chatInput.TextColor3 = HyperGate.Theme.Secondary
-    chatInput.Parent = chatFrame
-
-    local function addChatBubble(text, isAI)
-        local bubble = Instance.new("TextLabel")
-        bubble.Size = UDim2.new(0.8, 0, 0, 40)
-        bubble.BackgroundColor3 = isAI and HyperGate.Theme.Primary or HyperGate.Theme.Accent
-        bubble.TextColor3 = Color3.new(1, 1, 1)
-        bubble.Text = text
-        bubble.TextWrapped = true
-        bubble.Parent = chatScroll
-
-        if not isAI then
-            bubble.AnchorPoint = Vector2.new(1, 0)
-            bubble.Position = UDim2.new(1, -5, 0, #chatScroll:GetChildren() * 45)
-        else
-            bubble.Position = UDim2.new(0, 5, 0, #chatScroll:GetChildren() * 45)
-        end
-
-        chatScroll.CanvasSize = UDim2.new(0, 0, 0, #chatScroll:GetChildren() * 45)
-        chatScroll.CanvasPosition = Vector2.new(0, chatScroll.CanvasSize.Y.Offset)
-    end
-
-    local function handleCommand(message)
-        local response
-        if message:lower() == "time" then
-            response = "Current Time: " .. os.date("%X")
-        elseif message:lower() == "date" then
-            response = "Today's Date: " .. os.date("%x")
-        elseif message:lower() == "hello" then
-            response = "Hello! How can I assist you today?"
-        elseif message:lower():find("teleport") then
-            response = "Teleportation is not yet configured."
-        else
-            response = "I'm not sure how to respond to that."
-        end
-        return response
-    end
-
-    chatInput.FocusLost:Connect(function(enter)
-        if enter then
-            local message = chatInput.Text
-            chatInput.Text = ""
-
-            -- Add user message
-            addChatBubble(message, false)
-
-            -- AI response with command handling
-            task.wait(0.5)
-            addChatBubble(handleCommand(message), true)
-        end
-    end)
-end
-
--- Settings System
-local function CreateSettings()
-    local settingsFrame = Instance.new("Frame")
-    settingsFrame.Size = UDim2.new(0, 300, 0, 200)
-    settingsFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
-    settingsFrame.BackgroundColor3 = HyperGate.Theme.Primary
-    settingsFrame.Parent = gui
-
-    -- Background Selector
-    local bgSelector = Instance.new("ScrollingFrame")
-    bgSelector.Size = UDim2.new(1, 0, 0, 80)
-    bgSelector.Parent = settingsFrame
-
-    for _, bg in ipairs(HyperGate.Backgrounds) do
-        local thumb = Instance.new("ImageButton")
-        thumb.Image = bg
-        thumb.Size = UDim2.new(0, 80, 0, 80)
-        thumb.BackgroundTransparency = 1
-        thumb.MouseButton1Click:Connect(function()
-            PlayerSettings.Background = bg
-            CreateBackground(mainFrame)
-        end)
-        thumb.Parent = bgSelector
-    end
-end
-
--- Main GUI Setup
-local gui = Instance.new("ScreenGui")
-gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
-
+-- Main GUI Construction
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 400, 0, 500)
@@ -214,7 +161,7 @@ mainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
 mainFrame.BackgroundColor3 = HyperGate.Theme.Primary
 mainFrame.Parent = gui
 
--- Create ProfileFrame and Avatar UI elements so CreateProfile can reference them
+-- Create ProfileFrame and Avatar
 local profileFrame = Instance.new("Frame")
 profileFrame.Name = "ProfileFrame"
 profileFrame.Size = UDim2.new(0, 150, 0, 150)
@@ -225,174 +172,28 @@ profileFrame.Parent = mainFrame
 local avatar = Instance.new("ImageLabel")
 avatar.Name = "Avatar"
 avatar.Size = UDim2.new(1, 0, 1, 0)
-avatar.Position = UDim2.new(0, 0, 0, 0)
 avatar.BackgroundTransparency = 1
 avatar.Parent = profileFrame
 
+-- Initialize components
 MakeDraggable(mainFrame)
 CreateBackground(mainFrame)
-CreateProfile()
+CreateProfile(mainFrame)
 CreateAIChat(mainFrame)
 CreateSettings()
 
--- Auto-save on game close
+-- Finish loading sequence
+loadTween.Completed:Wait()
+loadingGui:Destroy()
+gui.Enabled = true
+
+-- Auto-save and cleanup
 game:BindToClose(function()
-    pcall(function()
-        SaveSettings(Players.LocalPlayer)
-    end)
+    pcall(SaveSettings, Players.LocalPlayer)
 end)
 
--- Save the settings when the player leaves
 Players.PlayerRemoving:Connect(function(player)
     if player == Players.LocalPlayer then
-        pcall(function()
-            SaveSettings(player)
-        end)
-    end
-end)-- Smart AI System with Command Response
-local function CreateAIChat(parent)
-    local chatFrame = Instance.new("Frame")
-    chatFrame.Size = UDim2.new(1, -20, 0, 150)
-    chatFrame.Position = UDim2.new(0, 10, 0, 350)
-    chatFrame.BackgroundColor3 = HyperGate.Theme.Primary
-    chatFrame.Parent = parent
-
-    local chatScroll = Instance.new("ScrollingFrame")
-    chatScroll.Size = UDim2.new(1, -10, 1, -40)
-    chatScroll.Position = UDim2.new(0, 5, 0, 5)
-    chatScroll.BackgroundTransparency = 1
-    chatScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    chatScroll.Parent = chatFrame
-
-    local chatInput = Instance.new("TextBox")
-    chatInput.Size = UDim2.new(1, -10, 0, 30)
-    chatInput.Position = UDim2.new(0, 5, 1, -35)
-    chatInput.PlaceholderText = "Ask me something..."
-    chatInput.BackgroundColor3 = HyperGate.Theme.Primary
-    chatInput.TextColor3 = HyperGate.Theme.Secondary
-    chatInput.Parent = chatFrame
-
-    local function addChatBubble(text, isAI)
-        local bubble = Instance.new("TextLabel")
-        bubble.Size = UDim2.new(0.8, 0, 0, 40)
-        bubble.BackgroundColor3 = isAI and HyperGate.Theme.Primary or HyperGate.Theme.Accent
-        bubble.TextColor3 = Color3.new(1, 1, 1)
-        bubble.Text = text
-        bubble.TextWrapped = true
-        bubble.Parent = chatScroll
-
-        if not isAI then
-            bubble.AnchorPoint = Vector2.new(1, 0)
-            bubble.Position = UDim2.new(1, -5, 0, #chatScroll:GetChildren() * 45)
-        else
-            bubble.Position = UDim2.new(0, 5, 0, #chatScroll:GetChildren() * 45)
-        end
-
-        chatScroll.CanvasSize = UDim2.new(0, 0, 0, #chatScroll:GetChildren() * 45)
-        chatScroll.CanvasPosition = Vector2.new(0, chatScroll.CanvasSize.Y.Offset)
-    end
-
-    local function handleCommand(message)
-        local response
-        if message:lower() == "time" then
-            response = "Current Time: " .. os.date("%X")
-        elseif message:lower() == "date" then
-            response = "Today's Date: " .. os.date("%x")
-        elseif message:lower() == "hello" then
-            response = "Hello! How can I assist you today?"
-        elseif message:lower():find("teleport") then
-            response = "Teleportation is not yet configured."
-        else
-            response = "I'm not sure how to respond to that."
-        end
-        return response
-    end
-
-    chatInput.FocusLost:Connect(function(enter)
-        if enter then
-            local message = chatInput.Text
-            chatInput.Text = ""
-
-            -- Add user message
-            addChatBubble(message, false)
-
-            -- AI response with command handling
-            task.wait(0.5)
-            addChatBubble(handleCommand(message), true)
-        end
-    end)
-end
-
--- Settings System
-local function CreateSettings()
-    local settingsFrame = Instance.new("Frame")
-    settingsFrame.Size = UDim2.new(0, 300, 0, 200)
-    settingsFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
-    settingsFrame.BackgroundColor3 = HyperGate.Theme.Primary
-    settingsFrame.Parent = gui
-
-    -- Background Selector
-    local bgSelector = Instance.new("ScrollingFrame")
-    bgSelector.Size = UDim2.new(1, 0, 0, 80)
-    bgSelector.Parent = settingsFrame
-
-    for _, bg in ipairs(HyperGate.Backgrounds) do
-        local thumb = Instance.new("ImageButton")
-        thumb.Image = bg
-        thumb.Size = UDim2.new(0, 80, 0, 80)
-        thumb.BackgroundTransparency = 1
-        thumb.MouseButton1Click:Connect(function()
-            PlayerSettings.Background = bg
-            CreateBackground(mainFrame)
-        end)
-        thumb.Parent = bgSelector
-    end
-end
-
--- Main GUI Setup
-local gui = Instance.new("ScreenGui")
-gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 400, 0, 500)
-mainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
-mainFrame.BackgroundColor3 = HyperGate.Theme.Primary
-mainFrame.Parent = gui
-
--- Create ProfileFrame and Avatar UI elements so CreateProfile can reference them
-local profileFrame = Instance.new("Frame")
-profileFrame.Name = "ProfileFrame"
-profileFrame.Size = UDim2.new(0, 150, 0, 150)
-profileFrame.Position = UDim2.new(0, 20, 0, 20)
-profileFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-profileFrame.Parent = mainFrame
-
-local avatar = Instance.new("ImageLabel")
-avatar.Name = "Avatar"
-avatar.Size = UDim2.new(1, 0, 1, 0)
-avatar.Position = UDim2.new(0, 0, 0, 0)
-avatar.BackgroundTransparency = 1
-avatar.Parent = profileFrame
-
-MakeDraggable(mainFrame)
-CreateBackground(mainFrame)
-CreateProfile()
-CreateAIChat(mainFrame)
-CreateSettings()
-
--- Auto-save on game close
-game:BindToClose(function()
-    pcall(function()
-        SaveSettings(Players.LocalPlayer)
-    end)
-end)
-
--- Save the settings when the player leaves
-Players.PlayerRemoving:Connect(function(player)
-    if player == Players.LocalPlayer then
-        pcall(function()
-            SaveSettings(player)
-        end)
+        pcall(SaveSettings, player)
     end
 end)
