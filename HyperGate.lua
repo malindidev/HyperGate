@@ -1,3 +1,4 @@
+-- HyperGate Client v1.2
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
@@ -5,208 +6,234 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TextService = game:GetService("TextService")
 
--- HyperGate Configuration
+-- Configuration
 local HyperGate = {
     Themes = {
         Cyber = {
             Primary = Color3.fromRGB(15, 15, 25),
             Secondary = Color3.fromRGB(0, 255, 163),
-            Accent = Color3.fromRGB(140, 0, 255),
-            Transparency = 0.1
+            Accent = Color3.fromRGB(140, 0, 255)
         },
         Midnight = {
             Primary = Color3.fromRGB(20, 20, 40),
             Secondary = Color3.fromRGB(140, 0, 255),
-            Accent = Color3.fromRGB(200, 0, 255),
-            Transparency = 0.2
+            Accent = Color3.fromRGB(200, 0, 255)
         }
     },
     Backgrounds = {
-        "rbxassetid://7125432456", -- Nebula
-        "rbxassetid://7125432457", -- Circuit
-        "rbxassetid://7125432458", -- Particle
-        "rbxassetid://7125432459"  -- Grid
+        "rbxassetid://7125432456",
+        "rbxassetid://7125432457",
+        "rbxassetid://7125432458",
+        "rbxassetid://7125432459"
     },
-    Responsive = {
-        MobileBreakpoint = 600,
-        MaxWidth = 600,
-        MaxHeight = 800
+    DefaultSettings = {
+        Theme = "Cyber",
+        Background = "rbxassetid://7125432456",
+        Transparency = 0.1,
+        SmartDefaults = false,
+        PerformanceMode = true
     }
 }
 
--- Client-Side Settings
-local PlayerSettings = {
-    Theme = "Cyber",
-    Transparency = 0.1,
-    LastSave = os.time()
-}
+-- Client State
+local PlayerSettings = table.clone(HyperGate.DefaultSettings)
 local isMinimized = false
-local activeTooltip = nil
+local heavyElements = {}
+local activeTheme = HyperGate.Themes[PlayerSettings.Theme]
 
--- Performance Optimizations
-local DEBOUNCE_TIME = 0.5
-local function SafeAction(fn)
-    return function(...)
-        if not PlayerSettings.Debounce then
-            PlayerSettings.Debounce = true
-            fn(...)
-            task.wait(DEBOUNCE_TIME)
-            PlayerSettings.Debounce = false
+-- UI Core
+local gui = Instance.new("ScreenGui")
+gui.Name = "HyperGateUI"
+gui.ResetOnSpawn = false
+
+local function ApplyCorners(instance, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(radius, 0)
+    corner.Parent = instance
+end
+
+-- Loading Screen
+local loadingGui = Instance.new("ScreenGui")
+loadingGui.Name = "LoadingScreen"
+loadingGui.IgnoreGuiInset = true
+
+local loadingFrame = Instance.new("Frame")
+loadingFrame.Size = UDim2.new(1, 0, 1, 0)
+loadingFrame.BackgroundColor3 = activeTheme.Primary
+loadingFrame.Parent = loadingGui
+
+local loadingBar = Instance.new("Frame")
+loadingBar.Size = UDim2.new(0, 0, 0, 4)
+loadingBar.Position = UDim2.new(0.5, 0, 0.5, 0)
+loadingBar.AnchorPoint = Vector2.new(0.5, 0.5)
+loadingBar.BackgroundColor3 = activeTheme.Secondary
+loadingBar.Parent = loadingFrame
+
+loadingGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+-- Main UI
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+mainFrame.BackgroundColor3 = activeTheme.Primary
+mainFrame.BackgroundTransparency = PlayerSettings.Transparency
+ApplyCorners(mainFrame, 0.1)
+
+-- Profile System
+local profileFrame = Instance.new("Frame")
+profileFrame.Name = "ProfileFrame"
+profileFrame.Size = UDim2.new(0, 150, 0, 150)
+profileFrame.Position = UDim2.new(0, 20, 0, 20)
+profileFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ApplyCorners(profileFrame, 0.2)
+profileFrame.Parent = mainFrame
+
+local avatar = Instance.new("ImageLabel")
+avatar.Name = "Avatar"
+avatar.Size = UDim2.new(1, 0, 1, 0)
+avatar.BackgroundTransparency = 1
+avatar.Image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", Players.LocalPlayer.UserId)
+avatar.Parent = profileFrame
+
+-- Session Timer
+local sessionTime = Instance.new("TextLabel")
+sessionTime.Text = "Session: 00:00:00"
+sessionTime.TextColor3 = activeTheme.Secondary
+sessionTime.BackgroundTransparency = 1
+sessionTime.Size = UDim2.new(1, 0, 0, 30)
+sessionTime.Position = UDim2.new(0, 0, 1, 0)
+sessionTime.Parent = avatar
+
+-- Discord Button
+local discordButton = Instance.new("TextButton")
+discordButton.Name = "DiscordButton"
+discordButton.Size = UDim2.new(0, 100, 0, 40)
+discordButton.Position = UDim2.new(1, -110, 0, 10)
+discordButton.AnchorPoint = Vector2.new(1, 0)
+discordButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+discordButton.Text = "Join Discord"
+discordButton.TextColor3 = Color3.new(1, 1, 1)
+ApplyCorners(discordButton, 0.2)
+discordButton.Parent = mainFrame
+
+-- Minimize System
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Name = "MinimizeButton"
+minimizeButton.Size = UDim2.new(0, 30, 0, 30)
+minimizeButton.Position = UDim2.new(1, -40, 0, 10)
+minimizeButton.AnchorPoint = Vector2.new(1, 0)
+minimizeButton.BackgroundColor3 = activeTheme.Accent
+minimizeButton.TextColor3 = Color3.new(1, 1, 1)
+minimizeButton.Text = "-"
+ApplyCorners(minimizeButton, 0.2)
+minimizeButton.Parent = mainFrame
+
+-- Draggable System
+local function MakeDraggable(frame)
+    local dragging, dragInput, dragStart, startPos
+
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
         end
-    end
-end
-
--- Theme and Transparency System
-local function ApplyVisualSettings()
-    local theme = HyperGate.Themes[PlayerSettings.Theme]
-    
-    -- Apply colors and transparency
-    mainFrame.BackgroundColor3 = theme.Primary
-    mainFrame.BackgroundTransparency = PlayerSettings.Transparency
-    
-    -- Update all children
-    for _, child in ipairs(mainFrame:GetChildren()) do
-        if child:IsA("Frame") then
-            child.BackgroundTransparency = PlayerSettings.Transparency + 0.1
-        end
-    end
-end
-
--- Tooltip System
-local function ShowTooltip(text, position)
-    if activeTooltip then
-        activeTooltip:Destroy()
-    end
-    
-    activeTooltip = Instance.new("TextLabel")
-    activeTooltip.Text = text
-    activeTooltip.TextColor3 = HyperGate.Themes[PlayerSettings.Theme].Secondary
-    activeTooltip.BackgroundColor3 = HyperGate.Themes[PlayerSettings.Theme].Primary
-    activeTooltip.Position = UDim2.new(0, position.X, 0, position.Y + 20)
-    activeTooltip.Parent = gui
-    activeTooltip.ZIndex = 100
-    
-    task.wait(2)
-    activeTooltip:Destroy()
-    activeTooltip = nil
-end
-
--- Enhanced AI Commands
-local function HandleCommand(message)
-    local cmd = message:lower()
-    
-    -- Performance-sensitive commands
-    if cmd == "players" then
-        return #Players:GetPlayers().. " online players"
-    elseif cmd == "fps" then
-        return math.floor(1/RunService.RenderStepped:Wait()).. " FPS"
-    elseif cmd == "ping" then
-        return "Your ping: "..game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
-    elseif cmd == "time" then
-        return "Server time: "..os.date("%X")
-    elseif cmd == "theme" then
-        return "Current theme: "..PlayerSettings.Theme
-    end
-    
-    return "I'm not sure how to respond to that."
-end
-
--- Mobile Support Enhancements
-local touchStartPos, touchStartTime
-local function SetupMobileControls()
-    UserInputService.TouchStarted:Connect(function(touch)
-        touchStartPos = touch.Position
-        touchStartTime = os.clock()
     end)
 
-    UserInputService.TouchEnded:Connect(function(touch)
-        if isMinimized then return end
-        
-        local swipe = touch.Position - touchStartPos
-        local duration = os.clock() - touchStartTime
-        
-        if duration < 0.3 then
-            if swipe.Y > 50 then
-                -- Swipe down to minimize
-                MinimizeUI()
-            elseif swipe.Y < -50 then
-                -- Swipe up to maximize
-                MaximizeUI()
-            end
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
 end
 
--- Performance-Optimized UI Scaling
-local lastScaleUpdate = 0
-local function UpdateUIScale()
-    if os.clock() - lastScaleUpdate < 0.5 then return end
-    lastScaleUpdate = os.clock()
-    
-    local viewport = workspace.CurrentCamera.ViewportSize
-    local isMobile = viewport.X < HyperGate.Responsive.MobileBreakpoint
-    
-    mainFrame.Size = UDim2.new(
-        isMobile and 0.95 or 0.8,
-        0,
-        isMobile and 0.9 or 0.85,
-        0
+-- Settings System
+local function CreateSettingsMenu()
+    local settingsFrame = Instance.new("Frame")
+    settingsFrame.Size = UDim2.new(0, 300, 0, 200)
+    settingsFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
+    settingsFrame.BackgroundTransparency = 0.95
+    settingsFrame.Parent = mainFrame
+
+    -- Smart Defaults Toggle
+    local defaultsToggle = Instance.new("TextButton")
+    defaultsToggle.Size = UDim2.new(1, -20, 0, 30)
+    defaultsToggle.Position = UDim2.new(0, 10, 0, 10)
+    defaultsToggle.Text = "Auto-Repair: " .. (PlayerSettings.SmartDefaults and "ON" or "OFF")
+    defaultsToggle.Activated:Connect(function()
+        PlayerSettings.SmartDefaults = not PlayerSettings.SmartDefaults
+        defaultsToggle.Text = "Auto-Repair: " .. (PlayerSettings.SmartDefaults and "ON" or "OFF")
+    end)
+    defaultsToggle.Parent = settingsFrame
+
+    -- Performance Toggle
+    local perfToggle = Instance.new("TextButton")
+    perfToggle.Size = UDim2.new(1, -20, 0, 30)
+    perfToggle.Position = UDim2.new(0, 10, 0, 50)
+    perfToggle.Text = "Performance: " .. (PlayerSettings.PerformanceMode and "ON" or "OFF")
+    perfToggle.Activated:Connect(function()
+        PlayerSettings.PerformanceMode = not PlayerSettings.PerformanceMode
+        perfToggle.Text = "Performance: " .. (PlayerSettings.PerformanceMode and "ON" or "OFF")
+    end)
+    perfToggle.Parent = settingsFrame
+end
+
+-- Final Initialization
+MakeDraggable(mainFrame)
+gui.Parent = Players.LocalPlayer.PlayerGui
+mainFrame.Parent = gui
+
+-- Loading Transition
+local loadTween = TweenService:Create(loadingBar, TweenInfo.new(2), {Size = UDim2.new(0.7, 0, 0, 4)})
+loadTween:Play()
+loadTween.Completed:Wait()
+loadingGui:Destroy()
+gui.Enabled = true
+
+-- Session Timer
+local startTime = tick()
+RunService.Heartbeat:Connect(function()
+    local duration = tick() - startTime
+    sessionTime.Text = string.format("Session: %02d:%02d:%02d",
+        math.floor(duration / 3600),
+        math.floor((duration % 3600) / 60),
+        math.floor(duration % 60)
     )
-    
-    -- Mobile-specific adjustments
-    if isMobile then
-        profileFrame.Size = UDim2.new(0.4, 0, 0.3, 0)
-        chatInput.FontSize = Enum.FontSize.Size14
-    else
-        profileFrame.Size = UDim2.new(0, 150, 0, 150)
-        chatInput.FontSize = Enum.FontSize.Size18
-    end
-end
+end)
 
--- Low-Power Mode
-local function ManagePerformance()
-    RunService.Heartbeat:Connect(function()
-        if isMinimized then
-            task.wait(1/15) -- Reduced update rate
-        elseif RunService:IsStudio() then
-            task.wait(1/30)
-        else
-            task.wait(1/60)
-        end
+-- Discord Button Handler
+discordButton.Activated:Connect(function()
+    setclipboard("https://discord.com/invite/jBtSMu6NCf")
+    local notif = Instance.new("TextLabel")
+    notif.Text = "Copied Discord link!"
+    notif.TextColor3 = activeTheme.Secondary
+    notif.BackgroundTransparency = 1
+    notif.Parent = mainFrame
+    task.wait(2)
+    notif:Destroy()
+end)
+
+-- Minimize Handler
+minimizeButton.Activated:Connect(function()
+    isMinimized = not isMinimized
+    TweenService:Create(mainFrame, TweenInfo.new(0.3), {
+        Size = isMinimized and UDim2.new(0, 100, 0, 40) or UDim2.new(0.8, 0, 0.8, 0)
+    }):Play()
+    minimizeButton.Text = isMinimized and "+" or "-"
+end)
+
+-- Auto-Save
+game:BindToClose(function()
+    pcall(function()
+        HttpService:JSONEncode(PlayerSettings)
+        -- Implement your save system here
     end)
-end
-
--- Initialize Core Systems
-ManagePerformance()
-SetupMobileControls()
-ApplyVisualSettings()
-
--- Auto-Save System
-task.spawn(function()
-    while true do
-        task.wait(300) -- 5 minutes
-        PlayerSettings.LastSave = os.time()
-        pcall(SaveSettings, Players.LocalPlayer)
-    end
 end)
-
--- Add tooltips to existing elements
-discordButton.MouseEnter:Connect(function(input)
-    ShowTooltip("Click to copy Discord invite link!", Vector2.new(input.X, input.Y))
-end)
-
-minimizeButton.MouseEnter:Connect(function(input)
-    ShowTooltip(isMinimized and "Restore UI" or "Minimize UI", Vector2.new(input.X, input.Y))
-end)
-
--- Modified AI Chat Handler with Performance
-chatInput.FocusLost:Connect(SafeAction(function(enter)
-    if enter then
-        local message = chatInput.Text
-        chatInput.Text = ""
-        
-        addChatBubble(message, false)
-        task.wait(0.5)
-        addChatBubble(HandleCommand(message), true)
-    end
-end))
