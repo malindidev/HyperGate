@@ -7,10 +7,19 @@ local TextService = game:GetService("TextService")
 
 -- HyperGate Configuration
 local HyperGate = {
-    Theme = {
-        Primary = Color3.fromRGB(15, 15, 25),
-        Secondary = Color3.fromRGB(0, 255, 163),
-        Accent = Color3.fromRGB(140, 0, 255)
+    Themes = {
+        Cyber = {
+            Primary = Color3.fromRGB(15, 15, 25),
+            Secondary = Color3.fromRGB(0, 255, 163),
+            Accent = Color3.fromRGB(140, 0, 255),
+            Transparency = 0.1
+        },
+        Midnight = {
+            Primary = Color3.fromRGB(20, 20, 40),
+            Secondary = Color3.fromRGB(140, 0, 255),
+            Accent = Color3.fromRGB(200, 0, 255),
+            Transparency = 0.2
+        }
     },
     Backgrounds = {
         "rbxassetid://7125432456", -- Nebula
@@ -26,173 +35,178 @@ local HyperGate = {
 }
 
 -- Client-Side Settings
-local PlayerSettings = {}
+local PlayerSettings = {
+    Theme = "Cyber",
+    Transparency = 0.1,
+    LastSave = os.time()
+}
 local isMinimized = false
+local activeTooltip = nil
 
--- Create loading screen
-local loadingGui = Instance.new("ScreenGui")
-loadingGui.Name = "LoadingScreen"
-loadingGui.IgnoreGuiInset = true
-loadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-local loadingFrame = Instance.new("Frame")
-loadingFrame.Size = UDim2.new(1, 0, 1, 0)
-loadingFrame.BackgroundColor3 = HyperGate.Theme.Primary
-loadingFrame.Parent = loadingGui
-
-local loadingBar = Instance.new("Frame")
-loadingBar.Size = UDim2.new(0, 0, 0, 4)
-loadingBar.Position = UDim2.new(0.5, 0, 0.5, 0)
-loadingBar.AnchorPoint = Vector2.new(0.5, 0.5)
-loadingBar.BackgroundColor3 = HyperGate.Theme.Secondary
-loadingBar.Parent = loadingFrame
-
-local loadingText = Instance.new("TextLabel")
-loadingText.Text = "HYPERGATE INITIALIZING"
-loadingText.TextColor3 = Color3.new(1, 1, 1)
-loadingText.Size = UDim2.new(1, 0, 0, 50)
-loadingText.Position = UDim2.new(0, 0, 0.45, 0)
-loadingText.BackgroundTransparency = 1
-loadingText.Parent = loadingFrame
-
-loadingGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
-
--- Animate loading bar
-local loadTween = TweenService:Create(loadingBar, TweenInfo.new(2, Enum.EasingStyle.Quad), {
-    Size = UDim2.new(0.7, 0, 0, 4)
-})
-loadTween:Play()
-
--- Main GUI Setup
-local gui = Instance.new("ScreenGui")
-gui.Name = "HyperGateUI"
-gui.Enabled = false
-gui.Parent = Players.LocalPlayer.PlayerGui
-
--- Rounded corners function
-local function ApplyCorners(instance, radius)
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(radius, 0)
-    corner.Parent = instance
+-- Performance Optimizations
+local DEBOUNCE_TIME = 0.5
+local function SafeAction(fn)
+    return function(...)
+        if not PlayerSettings.Debounce then
+            PlayerSettings.Debounce = true
+            fn(...)
+            task.wait(DEBOUNCE_TIME)
+            PlayerSettings.Debounce = false
+        end
+    end
 end
 
--- Dynamic UI Scaling
+-- Theme and Transparency System
+local function ApplyVisualSettings()
+    local theme = HyperGate.Themes[PlayerSettings.Theme]
+    
+    -- Apply colors and transparency
+    mainFrame.BackgroundColor3 = theme.Primary
+    mainFrame.BackgroundTransparency = PlayerSettings.Transparency
+    
+    -- Update all children
+    for _, child in ipairs(mainFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child.BackgroundTransparency = PlayerSettings.Transparency + 0.1
+        end
+    end
+end
+
+-- Tooltip System
+local function ShowTooltip(text, position)
+    if activeTooltip then
+        activeTooltip:Destroy()
+    end
+    
+    activeTooltip = Instance.new("TextLabel")
+    activeTooltip.Text = text
+    activeTooltip.TextColor3 = HyperGate.Themes[PlayerSettings.Theme].Secondary
+    activeTooltip.BackgroundColor3 = HyperGate.Themes[PlayerSettings.Theme].Primary
+    activeTooltip.Position = UDim2.new(0, position.X, 0, position.Y + 20)
+    activeTooltip.Parent = gui
+    activeTooltip.ZIndex = 100
+    
+    task.wait(2)
+    activeTooltip:Destroy()
+    activeTooltip = nil
+end
+
+-- Enhanced AI Commands
+local function HandleCommand(message)
+    local cmd = message:lower()
+    
+    -- Performance-sensitive commands
+    if cmd == "players" then
+        return #Players:GetPlayers().. " online players"
+    elseif cmd == "fps" then
+        return math.floor(1/RunService.RenderStepped:Wait()).. " FPS"
+    elseif cmd == "ping" then
+        return "Your ping: "..game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
+    elseif cmd == "time" then
+        return "Server time: "..os.date("%X")
+    elseif cmd == "theme" then
+        return "Current theme: "..PlayerSettings.Theme
+    end
+    
+    return "I'm not sure how to respond to that."
+end
+
+-- Mobile Support Enhancements
+local touchStartPos, touchStartTime
+local function SetupMobileControls()
+    UserInputService.TouchStarted:Connect(function(touch)
+        touchStartPos = touch.Position
+        touchStartTime = os.clock()
+    end)
+
+    UserInputService.TouchEnded:Connect(function(touch)
+        if isMinimized then return end
+        
+        local swipe = touch.Position - touchStartPos
+        local duration = os.clock() - touchStartTime
+        
+        if duration < 0.3 then
+            if swipe.Y > 50 then
+                -- Swipe down to minimize
+                MinimizeUI()
+            elseif swipe.Y < -50 then
+                -- Swipe up to maximize
+                MaximizeUI()
+            end
+        end
+    end)
+end
+
+-- Performance-Optimized UI Scaling
+local lastScaleUpdate = 0
 local function UpdateUIScale()
+    if os.clock() - lastScaleUpdate < 0.5 then return end
+    lastScaleUpdate = os.clock()
+    
     local viewport = workspace.CurrentCamera.ViewportSize
     local isMobile = viewport.X < HyperGate.Responsive.MobileBreakpoint
     
-    local widthScale = math.min(0.9, HyperGate.Responsive.MaxWidth/viewport.X)
-    local heightScale = math.min(0.9, HyperGate.Responsive.MaxHeight/viewport.Y)
-    
-    gui.MainFrame.Size = UDim2.new(
-        isMobile and 0.95 or widthScale,
+    mainFrame.Size = UDim2.new(
+        isMobile and 0.95 or 0.8,
         0,
-        isMobile and 0.9 or heightScale,
+        isMobile and 0.9 or 0.85,
         0
     )
-end
-
--- Discord Button
-local function CreateDiscordButton(parent)
-    local discordButton = Instance.new("TextButton")
-    discordButton.Name = "DiscordButton"
-    discordButton.Size = UDim2.new(0, 100, 0, 40)
-    discordButton.Position = UDim2.new(1, -110, 0, 10)
-    discordButton.AnchorPoint = Vector2.new(1, 0)
-    discordButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-    discordButton.Text = "Join Discord"
-    discordButton.TextColor3 = Color3.new(1, 1, 1)
-    ApplyCorners(discordButton, 0.2)
-
-    discordButton.MouseButton1Click:Connect(function()
-        setclipboard("https://discord.com/invite/jBtSMu6NCf")
-        local notification = Instance.new("TextLabel")
-        notification.Text = "Discord link copied!"
-        notification.TextColor3 = HyperGate.Theme.Secondary
-        notification.BackgroundTransparency = 1
-        notification.Parent = parent
-        task.wait(2)
-        notification:Destroy()
-    end)
     
-    discordButton.Parent = parent
+    -- Mobile-specific adjustments
+    if isMobile then
+        profileFrame.Size = UDim2.new(0.4, 0, 0.3, 0)
+        chatInput.FontSize = Enum.FontSize.Size14
+    else
+        profileFrame.Size = UDim2.new(0, 150, 0, 150)
+        chatInput.FontSize = Enum.FontSize.Size18
+    end
 end
 
--- Minimize/Maximize System
-local function CreateMinimizeButton(parent)
-    local minimizeButton = Instance.new("TextButton")
-    minimizeButton.Name = "MinimizeButton"
-    minimizeButton.Size = UDim2.new(0, 30, 0, 30)
-    minimizeButton.Position = UDim2.new(1, -40, 0, 10)
-    minimizeButton.AnchorPoint = Vector2.new(1, 0)
-    minimizeButton.BackgroundColor3 = HyperGate.Theme.Accent
-    minimizeButton.Text = "-"
-    minimizeButton.TextColor3 = Color3.new(1, 1, 1)
-    ApplyCorners(minimizeButton, 0.2)
-
-    minimizeButton.MouseButton1Click:Connect(function()
-        isMinimized = not isMinimized
+-- Low-Power Mode
+local function ManagePerformance()
+    RunService.Heartbeat:Connect(function()
         if isMinimized then
-            TweenService:Create(parent, TweenInfo.new(0.3), {
-                Size = UDim2.new(0, 100, 0, 40)
-            }):Play()
-            minimizeButton.Text = "+"
+            task.wait(1/15) -- Reduced update rate
+        elseif RunService:IsStudio() then
+            task.wait(1/30)
         else
-            UpdateUIScale()
-            minimizeButton.Text = "-"
+            task.wait(1/60)
         end
     end)
-    
-    minimizeButton.Parent = parent
 end
 
--- Main Frame Construction
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-mainFrame.BackgroundColor3 = HyperGate.Theme.Primary
-ApplyCorners(mainFrame, 0.1)
-mainFrame.Parent = gui
+-- Initialize Core Systems
+ManagePerformance()
+SetupMobileControls()
+ApplyVisualSettings()
 
--- Initialize UI Scaling
-UpdateUIScale()
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateUIScale)
-
--- Create Profile Frame
-local profileFrame = Instance.new("Frame")
-profileFrame.Name = "ProfileFrame"
-profileFrame.Size = UDim2.new(0, 150, 0, 150)
-profileFrame.Position = UDim2.new(0, 20, 0, 20)
-profileFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-ApplyCorners(profileFrame, 0.1)
-profileFrame.Parent = mainFrame
-
-local avatar = Instance.new("ImageLabel")
-avatar.Name = "Avatar"
-avatar.Size = UDim2.new(1, 0, 1, 0)
-avatar.BackgroundTransparency = 1
-avatar.Parent = profileFrame
-
--- Add Components
-CreateDiscordButton(mainFrame)
-CreateMinimizeButton(mainFrame)
-MakeDraggable(mainFrame)
-CreateBackground(mainFrame)
-CreateProfile(mainFrame)
-
--- Finish loading sequence
-loadTween.Completed:Wait()
-loadingGui:Destroy()
-gui.Enabled = true
-
--- Auto-save and cleanup
-game:BindToClose(function()
-    pcall(SaveSettings, Players.LocalPlayer)
-end)
-
-Players.PlayerRemoving:Connect(function(player)
-    if player == Players.LocalPlayer then
-        pcall(SaveSettings, player)
+-- Auto-Save System
+task.spawn(function()
+    while true do
+        task.wait(300) -- 5 minutes
+        PlayerSettings.LastSave = os.time()
+        pcall(SaveSettings, Players.LocalPlayer)
     end
 end)
+
+-- Add tooltips to existing elements
+discordButton.MouseEnter:Connect(function(input)
+    ShowTooltip("Click to copy Discord invite link!", Vector2.new(input.X, input.Y))
+end)
+
+minimizeButton.MouseEnter:Connect(function(input)
+    ShowTooltip(isMinimized and "Restore UI" or "Minimize UI", Vector2.new(input.X, input.Y))
+end)
+
+-- Modified AI Chat Handler with Performance
+chatInput.FocusLost:Connect(SafeAction(function(enter)
+    if enter then
+        local message = chatInput.Text
+        chatInput.Text = ""
+        
+        addChatBubble(message, false)
+        task.wait(0.5)
+        addChatBubble(HandleCommand(message), true)
+    end
+end))
