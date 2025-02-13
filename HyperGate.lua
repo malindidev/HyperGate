@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
+local UserInputService = game:GetService("UserInputService") -- Added missing import
 
 -- Configuration
 local HyperGate = {
@@ -202,11 +203,8 @@ teleportButton.Activated:Connect(function()
     local targetPlayer = GetPlayerByName(targetName)
     
     if targetPlayer then
-        TeleportService:TeleportToPlaceInstance(
-            game.PlaceId,
-            game.JobId,
-            targetPlayer
-        )
+        -- Teleport to the target player's server
+        TeleportService:TeleportToPlayer(targetPlayer)
     else
         local notif = Instance.new("TextLabel")
         notif.Text = "Player not found!"
